@@ -1,0 +1,37 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "sbd": {
+      ".read": "auth != null && root.child('sbd/admins').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('sbd/admins').child(auth.uid).exists()",
+      "admins": {
+        "$uid": {
+          ".read": "auth != null && auth.uid == $uid"
+        }
+      },
+      "products": {
+        ".read": true,
+        "$pid": {
+          "stock": {
+            ".write": "auth != null && newData.isNumber() && data.isNumber() && newData.val() >= 0 && newData.val() < data.val()"
+          }
+        }
+      },
+      "categories": {
+        ".read": true
+      },
+      "orders": {
+        ".read": "auth != null && query.orderByChild == 'customerId' && query.equalTo == auth.uid",
+        ".indexOn": [
+          "customerId",
+          "createdAt"
+        ],
+        "$oid": {
+          ".write": "(auth != null && !data.exists() && newData.child('customerId').val() == auth.uid && newData.child('orderStatus').val() == 'PENDING' && (newData.child('paymentStatus').val() == 'COD' || newData.child('paymentStatus').val() == 'VERIFY')) || (auth != null && data.exists() && data.child('customerId').val() == auth.uid && data.child('orderStatus').val() == 'PENDING' && newData.child('orderStatus').val() == 'CANCELLED' && newData.child('totalAmount').val() == data.child('totalAmount').val() && newData.child('paymentStatus').val() == data.child('paymentStatus').val() && !newData.child('stockRestored').exists() && !newData.child('adminHidden').exists())",
+          ".validate": "newData.hasChildren(['id','customerId','items','totalAmount','orderStatus']) && newData.child('id').val() == $oid && newData.child('totalAmount').isNumber()"
+        }
+      }
+    }
+  }
+}

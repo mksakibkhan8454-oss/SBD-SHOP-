@@ -1,0 +1,153 @@
+<!DOCTYPE html><html lang="bn"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>SBD SHOP - Shop</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+<script src="sbd-core.js"></script>
+<script src="bd-locations.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+Bengali:wght@400;600;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="sbd-style.css"></head><body class="text-slate-800"><div id="root"></div><script type="text/babel">
+const { useState, useEffect } = React;
+const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+
+const NOIMG = 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=500&auto=format&fit=crop&q=60';
+function Vid({ u }) { // YouTube / সরাসরি video ফাইল / অন্য লিংক
+  const m = u.match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([\w-]{11})/);
+  if (m) return <iframe className="w-full aspect-video rounded-xl" src={'https://www.youtube.com/embed/' + m[1]} allowFullScreen></iframe>;
+  if (/\.(mp4|webm|ogg)(\?|$)/i.test(u) || u.startsWith('data:video')) return <video controls className="w-full rounded-xl bg-black" src={u}></video>;
+  return <a href={u} target="_blank" rel="noreferrer" className="block p-3 bg-slate-100 rounded-xl text-xs text-blue-600 break-all">▶ ভিডিও দেখুন: {u}</a>;
+}
+const STEPS = ['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED'];
+function Track({ s }) {
+  if (s === 'CANCELLED') return <div className="text-[11px] font-bold text-red-500 py-1">✕ Order বাতিল হয়েছে</div>;
+  const k = STEPS.indexOf(s);
+  return <div className="track"><div className="track-fill" style={{ width: (k / 3 * 100) + '%' }}></div>{STEPS.map((x, i) => <div key={x} className={'dot ' + (i <= k ? 'on' : '')}><span>{x[0] + x.slice(1).toLowerCase()}</span></div>)}</div>;
+}
+function Shop() {
+  const online = useConnected(), [toast, show] = useToast();
+  const prodRaw = useLive('products'), cats = useCategories().map(c => c.name);
+  const products = toList(prodRaw).filter(p => p.status !== 'hidden');
+  const [orders, setOrders] = useState([]);
+  const [page, setPage] = useState('HOME'), [q, setQ] = useState(''), [cat, setCat] = useState('ALL');
+  const [cart, setCart] = useState(lsGet('sbd_cart', {})); // {productId: qty} — দাম/stock সবসময় live
+  const [f, setF] = useState({ name: '', phone: '', division: '', district: '', upazila: '', address: '', paymentMethod: 'Cash on Delivery', trxId: '', ...lsGet('sbd_form', {}) });
+  const [busy, setBusy] = useState(false);
+  const [uid, setUid] = useState(null), [detail, setDetail] = useState(null), [buy, setBuy] = useState(null), [pic, setPic] = useState(0);
+  useEffect(() => { ensureAnon().then(u => setUid(u.uid)).catch(fireErr); }, []);
+  useEffect(() => { localStorage.setItem('sbd_cart', JSON.stringify(cart)); }, [cart]);
+  useEffect(() => { // শুধু নিজের order, real-time
+    if (!uid) return;
+    const r = R('orders').orderByChild('customerId').equalTo(uid);
+    const fn = r.on('value', s => setOrders(toList(s.val()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))), fireErr);
+    return () => r.off('value', fn);
+  }, [uid]);
+  const byId = Object.fromEntries(products.map(p => [p.id, p]));
+  const eff = buy || cart; // Order Now হলে শুধু সেই product
+  const lines = Object.entries(eff).map(([id, qty]) => ({ p: byId[id], qty, id }));
+  const bad = lines.some(l => !l.p || l.p.stock < l.qty);
+  const sub = lines.reduce((s, l) => s + (l.p ? price(l.p) * l.qty : 0), 0);
+  const count = Object.values(cart).reduce((a, b) => a + b, 0);
+  const add = p => { if (p.stock < (cart[p.id] || 0) + 1) return show('Stock এর বেশি নেওয়া যাবে না', true); setCart({ ...cart, [p.id]: (cart[p.id] || 0) + 1 }); show('Cart এ যোগ হয়েছে'); };
+  const chg = (id, d) => { const n = (cart[id] || 0) + d; const c = { ...cart }; if (n < 1) delete c[id]; else c[id] = n; setCart(c); };
+  const place = async e => {
+    e.preventDefault();
+    if (!uid) return show('একটু অপেক্ষা করুন, সংযোগ হচ্ছে...', true);
+    if (!lines.length || bad) return show('Cart এ সমস্যা আছে', true);
+    if (f.paymentMethod !== 'Cash on Delivery' && !f.trxId) return show('Transaction ID দিন', true);
+    setBusy(true);
+    try {
+      await placeOrder({ ...f, customerId: uid, items: lines.map(l => ({ productId: l.id, qty: l.qty })) });
+      localStorage.setItem('sbd_form', JSON.stringify(f)); if (!buy) setCart({}); setBuy(null); show('Order সফল হয়েছে!'); nav('ACCOUNT');
+    } catch (err) { show(err.message, true); }
+    setBusy(false);
+  };
+  const nav = p => {
+    if (p !== 'CHECKOUT' && p !== 'DETAIL') setBuy(null);
+    if (p === 'HOME') { if (page !== 'HOME' && history.state && history.state.sbd) history.back(); else setPage('HOME'); }
+    else { try { history[page === 'HOME' ? 'pushState' : 'replaceState']({ sbd: p }, ''); } catch (e) {} setPage(p); }
+    window.scrollTo(0, 0);
+  };
+  useEffect(() => { // ফোনের Back বাটন → Close, পিসিতে Esc → Close
+    const pop = () => { setBuy(null); setPage('HOME'); window.scrollTo(0, 0); };
+    const key = e => { if (e.key === 'Escape' && page !== 'HOME') nav('HOME'); };
+    window.addEventListener('popstate', pop); window.addEventListener('keydown', key);
+    return () => { window.removeEventListener('popstate', pop); window.removeEventListener('keydown', key); };
+  }, [page]);
+  const closeBar = <div className="sticky top-16 z-20 flex justify-end pointer-events-none"><button onClick={() => nav('HOME')} className="pointer-events-auto px-4 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-full shadow-lg">✕ Close</button></div>;
+  const cancelOrder = async o => {
+    if (!confirm(o.id + ' order টি cancel করবেন?')) return;
+    try { await R('orders/' + o.id + '/orderStatus').set('CANCELLED'); show('Order cancel হয়েছে'); }
+    catch (e) { show('Admin Confirm করে ফেলেছেন — আর cancel করা যাবে না', true); }
+  };
+  const openDetail = id => { setDetail(id); setPic(0); nav('DETAIL'); };
+  const orderNow = p => { if (!p || p.stock < 1) return show('Stock শেষ', true); setBuy({ [p.id]: 1 }); nav('CHECKOUT'); };
+  const shown = products.filter(p => p.name.toLowerCase().includes(q.toLowerCase()) && (cat === 'ALL' || p.category === cat));
+  const pm = ['Cash on Delivery', 'bKash', 'Nagad', 'SSLCommerz'];
+  return (<div className="min-h-screen">
+    {toast}
+    <nav className="glass sticky top-0 z-30"><div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+      <div onClick={() => nav('HOME')} className="cursor-pointer font-black text-xl tracking-tight">SBD <span className="grad-text">SHOP</span></div>
+      <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search..." className="inp-p flex-1 max-w-md p-2 text-xs hidden md:block" />
+      <div className="ml-auto flex items-center gap-3"><LiveBadge on={online} />
+        <button onClick={() => nav('CART')} className="relative px-2 text-xl">🛒{count > 0 && <b key={count} className="bump absolute -top-2 -right-1 bg-orange-500 text-white text-[10px] w-4 h-4 rounded-full text-center">{count}</b>}</button>
+        <button onClick={() => nav('ACCOUNT')} className="chip !py-1.5">My Orders</button></div></div></nav>
+    {page === 'HOME' && <main className="page-in max-w-6xl mx-auto p-4 space-y-5">
+      <div className="hero relative overflow-hidden rounded-3xl text-white p-8 md:p-12"><div className="blob b1"></div><div className="blob b2"></div><div className="relative"><span className="tag-dark">REAL-TIME STOCK · LIVE TRACKING</span><h2 className="text-3xl md:text-5xl font-black mt-3 leading-tight">Premium Products,<br />Delivered Nationwide</h2><p className="text-sm text-slate-300 mt-3">Cash on Delivery · সারা বাংলাদেশে</p></div></div>
+      <input className="inp-p w-full p-3 text-sm md:hidden" placeholder="🔍 Search products..." value={q} onChange={e => setQ(e.target.value)} />
+      <div className="flex gap-2 overflow-x-auto">{['ALL', ...cats].map(c => <button key={c} onClick={() => setCat(c)} className={'chip ' + (cat === c ? 'chip-on' : '')}>{c}</button>)}</div>
+      {prodRaw === undefined ? <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{[0, 1, 2, 3].map(i => <div key={i} className="skel"></div>)}</div> : <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{shown.map((p, i) => { const off = p.discountPrice ? Math.round((1 - p.discountPrice / p.price) * 100) : 0; return <div key={p.id} style={{ animationDelay: i * 60 + 'ms' }} className={card + ' pcard hover-lift fade-up flex flex-col justify-between !p-3'}>
+        <div onClick={() => openDetail(p.id)} className="space-y-2 cursor-pointer"><div className="relative overflow-hidden rounded-2xl bg-slate-100"><img src={p.image} className="pimg w-full h-40 object-cover" />{off > 0 && <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">-{off}%</span>}{p.stock < 1 && <div className="absolute inset-0 bg-slate-900/60 text-white text-xs font-bold flex items-center justify-center">Out of stock</div>}</div><span className="tag">{p.category}</span><h3 className="font-bold text-xs line-clamp-2 min-h-[2rem]">{p.name}</h3></div>
+        <div className="mt-3 space-y-2"><div className="flex items-baseline gap-2"><b className="text-base">{taka(price(p))}</b>{p.discountPrice && <s className="text-xs text-slate-400">{taka(p.price)}</s>}</div>
+          <button disabled={p.stock < 1} onClick={() => add(p)} className="btn-p w-full py-2 text-xs">{p.stock < 1 ? 'Out of stock' : 'Add to Cart'}</button></div></div>; })}</div>}
+    </main>}
+    {page === 'DETAIL' && (() => {
+      const p = byId[detail];
+      if (!p) return <main className="page-in max-w-3xl mx-auto p-4">{closeBar}<p className={card + ' mt-3 text-sm'}>Product পাওয়া যাচ্ছে না</p></main>;
+      const imgs = [p.image, ...toList(p.images)].filter(Boolean), vids = toList(p.videos);
+      const rows = (p.details || '').split('\n').map(x => x.trim()).filter(Boolean);
+      return <main className="page-in max-w-4xl mx-auto p-4 space-y-4">{closeBar}
+        <div className="grid md:grid-cols-2 gap-5">
+          <div className="space-y-2"><img key={pic} src={imgs[pic] || imgs[0] || NOIMG} className="fade-up w-full max-h-96 object-cover rounded-3xl bg-slate-100 shadow-xl" />
+            {imgs.length > 1 && <div className="flex gap-2 overflow-x-auto">{imgs.map((m, i) => <img key={i} src={m} onClick={() => setPic(i)} className={'w-16 h-16 object-cover rounded-lg border-2 cursor-pointer ' + (pic === i ? 'border-orange-500' : 'border-transparent')} />)}</div>}</div>
+          <div className="space-y-3"><span className="tag">{p.category}</span>
+            <h1 className="text-xl font-extrabold">{p.name}</h1>
+            <div className="flex items-baseline gap-2"><b className="text-2xl">{taka(price(p))}</b>{p.discountPrice && <s className="text-slate-400">{taka(p.price)}</s>}</div>
+            <p className={'text-xs font-bold ' + (p.stock < 1 ? 'text-red-600' : 'text-emerald-600')}>{p.stock < 1 ? 'Stock শেষ' : 'Stock আছে: ' + p.stock + ' টি'}</p>
+            <div className="flex gap-2"><button disabled={p.stock < 1} onClick={() => add(p)} className="btn-d flex-1 py-2.5 text-xs">Add to Cart</button>
+              <button disabled={p.stock < 1} onClick={() => orderNow(p)} className="btn-p flex-1 py-2.5 text-xs">Order Now</button></div>
+            {p.description && <div><h3 className="font-bold text-sm mb-1">Description</h3><p className="text-xs text-slate-600 whitespace-pre-line">{p.description}</p></div>}</div></div>
+        {rows.length > 0 && <div className={card}><h3 className="font-bold text-sm mb-2">Product Details</h3><table className="w-full text-xs"><tbody>{rows.map((r, i) => { const k = r.indexOf(':'); return <tr key={i} className="border-t">{k > 0 ? <><td className="py-1.5 pr-3 font-semibold w-1/3 align-top">{r.slice(0, k)}</td><td className="py-1.5 text-slate-600">{r.slice(k + 1).trim()}</td></> : <td colSpan="2" className="py-1.5 text-slate-600">{r}</td>}</tr>; })}</tbody></table></div>}
+        {vids.length > 0 && <div className="space-y-3"><h3 className="font-bold text-sm">Videos ({vids.length})</h3>{vids.map((v, i) => <Vid key={i} u={v} />)}</div>}
+      </main>;
+    })()}
+    {page === 'CART' && <main className="page-in max-w-3xl mx-auto p-4 space-y-3">{closeBar}<h2 className="font-bold">Cart ({lines.length})</h2>
+      {!lines.length ? <div className={card + ' text-center'}>Cart খালি</div> : <>{lines.map(l => <div key={l.id} className={card + ' flex items-center gap-3 text-xs fade-up'}>
+        {l.p ? <><img src={l.p.image} className="w-12 h-12 rounded object-cover" /><div className="flex-1 min-w-0"><b className="block truncate">{l.p.name}</b>{taka(price(l.p))}{l.p.stock < l.qty && <span className="text-red-600 ml-2">Stock মাত্র {l.p.stock}</span>}</div></> : <div className="flex-1 text-red-600">Product আর পাওয়া যাচ্ছে না</div>}
+        <button onClick={() => chg(l.id, -1)} className="qty-b">-</button><b>{l.qty}</b><button onClick={() => chg(l.id, 1)} className="qty-b">+</button>
+        <button onClick={() => setCart(Object.fromEntries(Object.entries(cart).filter(([k]) => k !== l.id)))} className="text-red-500">🗑</button></div>)}
+        <div className={card + ' flex justify-between items-center'}><div><span className="text-xs text-slate-500 block">Total (delivery সহ)</span><b className="text-lg">{taka(sub + FEE)}</b></div><button disabled={bad} onClick={() => nav('CHECKOUT')} className="btn-p px-6 py-2.5 text-xs">Checkout</button></div></>}</main>}
+    {page === 'CHECKOUT' && <main className="page-in max-w-2xl mx-auto p-4 space-y-3">{closeBar}<form onSubmit={place} className={card + ' space-y-3 p-6'}><h2 className="font-bold">{buy ? 'Order Now (শুধু এই product)' : 'Checkout'}</h2>
+      {lines.map(l => l.p && <div key={l.id} className="flex items-center gap-2 text-xs"><img src={l.p.image} className="w-10 h-10 rounded object-cover" /><span className="flex-1 truncate">{l.p.name} × {l.qty}</span><b>{taka(price(l.p) * l.qty)}</b></div>)}
+      <input required className={inp} placeholder="Full Name" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} />
+      <input required type="tel" className={inp} placeholder="Phone" value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <select required className={inp} value={f.division} onChange={e => setF({ ...f, division: e.target.value, district: '', upazila: '' })}><option value="">বিভাগ (Division)</option>{Object.keys(BD).map(d => <option key={d}>{d}</option>)}</select>
+        <select required disabled={!f.division} className={inp} value={f.district} onChange={e => setF({ ...f, district: e.target.value, upazila: '' })}><option value="">জেলা (District)</option>{Object.keys(BD[f.division] || {}).map(d => <option key={d}>{d}</option>)}</select>
+        <select required disabled={!f.district} className={inp} value={f.upazila} onChange={e => setF({ ...f, upazila: e.target.value })}><option value="">উপজেলা (Upazila)</option>{((BD[f.division] || {})[f.district] || []).map(d => <option key={d}>{d}</option>)}</select></div>
+      <textarea required className={inp} placeholder="ঠিকানা (বাড়ি, রোড, এলাকা)" value={f.address} onChange={e => setF({ ...f, address: e.target.value })}></textarea>
+      <div className="grid grid-cols-2 gap-2">{pm.map(m => <button type="button" key={m} onClick={() => setF({ ...f, paymentMethod: m })} className={'pay-b ' + (f.paymentMethod === m ? 'pay-on' : '')}>{m}</button>)}</div>
+      {f.paymentMethod !== 'Cash on Delivery' && <input className={inp} placeholder="Transaction ID" value={f.trxId} onChange={e => setF({ ...f, trxId: e.target.value })} />}
+      <button disabled={busy} className="btn-p w-full py-3 text-xs">{busy ? 'Placing...' : 'Confirm Order · ' + taka(sub + FEE)}</button></form></main>}
+    {page === 'ACCOUNT' && <main className="page-in max-w-3xl mx-auto p-4 space-y-3">{closeBar}<h2 className="font-bold">My Orders ({orders.length}) <span className="text-[10px] text-slate-400">status live আপডেট হয়</span></h2>
+      {orders.map(o => <div key={o.id} className={card + ' fade-up text-xs space-y-1'}><div className="flex justify-between font-bold"><span>{o.id}</span><Badge s={o.orderStatus} /></div><Track s={o.orderStatus} />
+        {toList(o.items).map((i, k) => { const lp = byId[i.productId]; return <div key={k} className="flex gap-3 items-center border-t pt-2">
+          <div className="flex-1 min-w-0 space-y-0.5"><b onClick={() => lp && openDetail(i.productId)} className="block truncate cursor-pointer text-sm">{i.name}</b><span className="text-slate-500">{i.quantity} × {taka(i.price)} = {taka(i.price * i.quantity)}</span></div>
+          <img onClick={() => lp && openDetail(i.productId)} src={(lp && lp.image) || i.image || NOIMG} className="w-20 h-20 rounded-xl object-cover bg-slate-100 cursor-pointer" /></div>; })}<div className="text-slate-500">{[o.address, o.upazila, o.district, o.division].filter(Boolean).join(', ')}</div><div>{o.paymentMethod} · <b>{taka(o.totalAmount)}</b></div>
+        {o.orderStatus === 'PENDING' && <button onClick={() => cancelOrder(o)} className="w-full mt-1 py-2 rounded-xl border-2 border-red-200 text-red-600 font-bold hover:bg-red-50">✕ Order Cancel করুন</button>}
+        {(o.orderStatus === 'CONFIRMED' || o.orderStatus === 'SHIPPED') && <p className="text-[11px] text-slate-400 pt-1">🔒 Order Confirm হয়ে গেছে — আর cancel করা যাবে না</p>}</div>)}</main>}
+  </div>);
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Shop />);
+</script></body></html>

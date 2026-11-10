@@ -1,0 +1,59 @@
+:root{--or:#f97316;--or2:#ea580c;--ink:#0f172a}
+html{scroll-behavior:smooth}
+body{font-family:'Inter','Noto Sans Bengali',system-ui,sans-serif;min-height:100vh;
+ background:radial-gradient(900px 480px at 8% -8%,#ffedd5 0,transparent 60%),radial-gradient(800px 460px at 100% 0,#e0e7ff 0,transparent 55%),#f8fafc;background-attachment:fixed;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px}
+/* motion */
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+@keyframes toastIn{from{opacity:0;transform:translateY(20px) scale(.95)}to{opacity:1;transform:none}}
+@keyframes bump{0%{transform:scale(.4)}60%{transform:scale(1.35)}100%{transform:scale(1)}}
+@keyframes shimmer{to{background-position:-200% 0}}
+@keyframes gradMove{0%,100%{background-position:0 50%}50%{background-position:100% 50%}}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-18px)}}
+.page-in{animation:fadeUp .55s cubic-bezier(.2,.8,.2,1) both}
+.fade-up{animation:fadeUp .6s cubic-bezier(.2,.8,.2,1) both}
+.toast-in{animation:toastIn .35s cubic-bezier(.2,.8,.2,1) both}
+.bump{animation:bump .45s cubic-bezier(.3,1.6,.5,1)}
+/* surfaces */
+.glass{background:rgba(255,255,255,.72);backdrop-filter:blur(16px) saturate(1.5);-webkit-backdrop-filter:blur(16px) saturate(1.5);border-bottom:1px solid rgba(15,23,42,.06);box-shadow:0 4px 30px -12px rgba(15,23,42,.15)}
+.card-p{background:rgba(255,255,255,.92);border:1px solid rgba(15,23,42,.06);border-radius:22px;padding:16px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 10px 28px -14px rgba(15,23,42,.18);transition:transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .3s}
+.hover-lift:hover{transform:translateY(-6px);box-shadow:0 18px 40px -14px rgba(15,23,42,.28)}
+.pcard .pimg{transition:transform .6s cubic-bezier(.2,.8,.2,1)}.pcard:hover .pimg{transform:scale(1.08)}
+.grad-text{background:linear-gradient(135deg,#fb923c,#ea580c);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero{background:linear-gradient(120deg,#0f172a,#1e1b4b,#7c2d12,#0f172a);background-size:300% 300%;animation:gradMove 12s ease infinite}
+.blob{position:absolute;border-radius:50%;filter:blur(50px);opacity:.5;animation:floaty 7s ease-in-out infinite}
+.b1{width:240px;height:240px;background:#f97316;right:-40px;top:-60px}.b2{width:200px;height:200px;background:#6366f1;right:200px;bottom:-90px;animation-delay:-3s}
+.tag{display:inline-block;font-size:10px;font-weight:700;color:#c2410c;background:#ffedd5;padding:3px 9px;border-radius:99px}
+.tag-dark{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;color:#fed7aa;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);padding:4px 11px;border-radius:99px}
+.chip{padding:8px 16px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap;background:#fff;border:1px solid #e2e8f0;transition:.25s}
+.chip:hover{transform:translateY(-2px);border-color:#fdba74}
+.chip-on{background:linear-gradient(135deg,#fb923c,#ea580c);color:#fff;border-color:transparent;box-shadow:0 8px 18px -8px rgba(234,88,12,.7)}
+.pay-b{padding:12px;font-size:12px;font-weight:700;border-radius:14px;border:1.5px solid #e2e8f0;background:#f8fafc;transition:.25s}
+.pay-on{border-color:#f97316;background:#fff7ed;color:#c2410c;box-shadow:0 0 0 4px rgba(249,115,22,.12);transform:scale(1.02)}
+.qty-b{width:28px;height:28px;border-radius:9px;background:#f1f5f9;font-weight:800}.qty-b:hover{background:#ffedd5}
+/* buttons & inputs */
+.btn-p,button.bg-orange-500{background:linear-gradient(135deg,#fb923c,#ea580c)!important;color:#fff;font-weight:700;border-radius:14px;box-shadow:0 10px 22px -10px rgba(234,88,12,.75)}
+.btn-d,button.bg-slate-900{background:linear-gradient(135deg,#1e293b,#0f172a)!important;color:#fff;font-weight:700;border-radius:14px}
+button{transition:transform .18s,box-shadow .25s,filter .2s,background .2s}
+button:not(:disabled):hover{filter:brightness(1.07);transform:translateY(-1px)}
+button:not(:disabled):active{transform:scale(.95)}
+button:disabled{cursor:not-allowed;opacity:.55;box-shadow:none}
+.btn-p:disabled,button.bg-orange-500:disabled{background:#cbd5e1!important}
+.inp-p,input:not([type=file]):not([type=checkbox]),select,textarea{border:1.5px solid #e2e8f0;border-radius:13px;background:#fff;transition:border-color .2s,box-shadow .2s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#f97316;box-shadow:0 0 0 4px rgba(249,115,22,.15)}
+.skel{border-radius:22px;height:300px;background:linear-gradient(90deg,#eef2f7 25%,#f8fafc 40%,#eef2f7 60%);background-size:200% 100%;animation:shimmer 1.3s linear infinite}
+.badge-p{letter-spacing:.04em;box-shadow:inset 0 0 0 1px rgba(15,23,42,.05)}
+/* order tracker */
+.track{position:relative;display:flex;justify-content:space-between;margin:14px 8px 26px}
+.track::before{content:'';position:absolute;top:6px;left:0;right:0;height:3px;background:#e2e8f0;border-radius:3px}
+.track-fill{position:absolute;top:6px;left:0;height:3px;background:linear-gradient(90deg,#fb923c,#ea580c);border-radius:3px;transition:width .9s cubic-bezier(.2,.8,.2,1)}
+.dot{position:relative;width:15px;height:15px;border-radius:50%;background:#e2e8f0;z-index:1;transition:.5s}
+.dot.on{background:#f97316;box-shadow:0 0 0 4px rgba(249,115,22,.2)}
+.dot span{position:absolute;top:20px;left:50%;transform:translateX(-50%);font-size:9px;color:#64748b;white-space:nowrap;font-weight:600}
+/* admin */
+.adm-head{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 20px;color:#fff;font-size:12px;background:linear-gradient(135deg,#0f172a,#1e293b 60%,#7c2d12);box-shadow:0 10px 30px -12px rgba(15,23,42,.6)}
+.tab-b{padding:7px 14px;border-radius:99px;background:rgba(255,255,255,.08);font-weight:600;border:1px solid rgba(255,255,255,.08)}
+.tab-on{background:linear-gradient(135deg,#fb923c,#ea580c);font-weight:800;box-shadow:0 8px 18px -8px rgba(234,88,12,.8)}
+.stat{position:relative;overflow:hidden}.stat-bar{position:absolute;left:0;top:0;height:4px;width:100%}
+.bar{height:100%;border-radius:6px;background:linear-gradient(90deg,#fb923c,#ea580c);transition:width 1s cubic-bezier(.2,.8,.2,1)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
